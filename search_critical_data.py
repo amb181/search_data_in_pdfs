@@ -9,6 +9,15 @@ from tkinter import *
 from tkinter import filedialog
 import pandas as pd
 import os, glob, fitz, csv, time, itertools, shutil, sys, datetime
+import ctypes
+
+# Hide console after letting the user know the app is loading
+kernel32 = ctypes.WinDLL('kernel32')
+user32 = ctypes.WinDLL('user32')
+SW_HIDE = 0
+hWnd = kernel32.GetConsoleWindow()
+user32.ShowWindow(hWnd, SW_HIDE)
+
 
 WINDOW_WIDTH = 450
 WINDOW_HEIGHT = 150
@@ -18,6 +27,13 @@ class Window():
         self.search_init()
 
     def search_init(self):
+        global running
+        running = False
+        try:
+            self.master.destroy()
+            running = True
+        except:
+            pass
         self.master = Tk()
     
         self.master.title("Critical Data")
@@ -103,7 +119,7 @@ class Window():
 
     def waiting(self):
         self.master = Tk()
-
+        self.master.attributes("-topmost", True)
         self.master.title("Critical Data")
         self.master['background'] = "#499e03"
         gif = PhotoImage(file=Window.resource_path("loading.gif"))
@@ -117,6 +133,7 @@ class Window():
     def done(self, time):
         self.master.destroy()
         self.master = Tk()
+        self.master.attributes("-topmost", True)
         self.master.title("Critical Data")
         self.master['background'] = "#499e03"
 
@@ -144,7 +161,7 @@ class Window():
     def continue_search(self):
         self.master.destroy()
         self.master = Tk()
-
+        self.master.attributes("-topmost", True)
         self.master.title("Critical Data")
         self.master['background'] = "#499e03"
 
@@ -170,14 +187,19 @@ class Window():
         self.master.mainloop()
 
     def get_path(self):
-        global path, folder
+        global path, folder, running
         path = str(self.e1.get())
         if path == "":
             path = filedialog.askdirectory()
         if path == "":
             self.master.destroy()
             return self.search_init()
+
         folder = glob.glob(path + "/*.pdf")
+
+        if running:
+            return self.get_params()
+
         self.master.destroy()
 
         if path == "":
@@ -247,7 +269,7 @@ class Window():
 
     def on_closing(self):
         self.master.destroy()
-        exit()
+        sys.exit()
 
 
 class Critical_Data():
@@ -255,8 +277,9 @@ class Critical_Data():
     def search_data(self, pdf):
         # Create a copy of original file
         os.makedirs(path + "\\highlighted_pdf\\", exist_ok=True)
-        shutil.copyfile(pdf, path + "\\highlighted_pdf\\" + os.path.basename(pdf))
-        searched_pdf = path + "\\highlighted_pdf\\" + os.path.basename(pdf)
+        pdf_name = os.path.basename(pdf).replace(".pdf", "")
+        searched_pdf = path + "\\highlighted_pdf\\" + pdf_name + "_" + os.path.basename(csv_name) + ".pdf"
+        shutil.copyfile(pdf, searched_pdf)
         # Extract text and search parameter
         doc = fitz.open(searched_pdf)
         num_pag = doc.page_count
