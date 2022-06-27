@@ -3,35 +3,33 @@ Version 1.0.0
 almolina@tenaris.com
 06/2022
 """
-print("Starting app\nThis may take a few seconds...")
 # Import libraries
 from tkinter import *
 from tkinter import filedialog
 import pandas as pd
 import os, glob, fitz, csv, time, itertools, shutil, sys, datetime
-import ctypes
-
-# Hide console after letting the user know the app is loading
-kernel32 = ctypes.WinDLL('kernel32')
-user32 = ctypes.WinDLL('user32')
-SW_HIDE = 0
-hWnd = kernel32.GetConsoleWindow()
-user32.ShowWindow(hWnd, SW_HIDE)
-
 
 WINDOW_WIDTH = 450
 WINDOW_HEIGHT = 150
 
 class Window():
+    def __init__(self) -> None:
+        self.path = ""
+        self.folder = []
+        self.running = False
+        self.csv_name = ""
+        self.words_lookup = []
+        self.time = 0.0
+        self.data = []
+
     def run(self):
         self.search_init()
 
     def search_init(self):
-        global running
-        running = False
+        self.running = False
         try:
             self.master.destroy()
-            running = True
+            self.running = True
         except:
             pass
         self.master = Tk()
@@ -56,7 +54,7 @@ class Window():
 
         self.master.bind_all("<Key>", self._onKeyRelease, "+")
         self.center(WINDOW_WIDTH, WINDOW_HEIGHT)
-        self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.master.protocol("WM_DELETE_WINDOW", lambda:sys.exit())
 
         self.master.mainloop()
     
@@ -73,7 +71,7 @@ class Window():
         file_menu = Menu(menu_bar, tearoff=False)
         file_menu.add_command(label="Change folder", command=self.search_init)
         file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.on_closing)
+        file_menu.add_command(label="Exit", command=lambda:sys.exit())
         menu_bar.add_cascade(label="Config", menu=file_menu)
 
         # Content
@@ -93,29 +91,28 @@ class Window():
 
         self.master.bind_all("<Key>", self._onKeyRelease, "+")
         self.center(WINDOW_WIDTH, WINDOW_HEIGHT)
-        self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.master.protocol("WM_DELETE_WINDOW", lambda:sys.exit())
 
         self.master.mainloop()
 
     def ask_filename(self):
-        self.master = Tk()
-        self.master.withdraw()
-
         today = datetime.datetime.today().strftime('%Y-%m-%d').replace("-", "_")
-        global csv_name
         csv_placeholder = "Search_report_" + today
 
         csv_name = filedialog.asksaveasfilename(
-            defaultextension='.csv', 
-            filetypes=[('CSV files', '*.csv')],
-            initialdir=path,
+            defaultextension = '.csv', 
+            filetypes = [('CSV files', '*.csv')],
+            initialdir = self.path,
             initialfile = csv_placeholder
         )
 
-        if ".csv" in csv_name:
-            csv_name = csv_name.replace(".csv", "")
+        if csv_name != "":
+            self.master.destroy()
 
-        self.master.destroy()
+            if ".csv" in csv_name:
+                self.csv_name = csv_name.replace(".csv", "")
+
+        
 
     def waiting(self):
         self.master = Tk()
@@ -126,11 +123,11 @@ class Window():
         Label(image=gif).grid(row=0, column=0)
 
         self.center(340, 340)
-        self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.master.protocol("WM_DELETE_WINDOW", lambda:sys.exit())
         
         self.master.update()
         
-    def done(self, time):
+    def done(self):
         self.master.destroy()
         self.master = Tk()
         self.master.attributes("-topmost", True)
@@ -139,7 +136,7 @@ class Window():
 
         l1 = Label(self.master, text='Search done!', bg='#499e03', font=("Arial", 14))
         l1.grid(row=0, columnspan=2)
-        l2 = Label(self.master, text='Elapsed time: {:.2f} min'.format(time), bg='#499e03', font=("Arial", 14))
+        l2 = Label(self.master, text='Elapsed time: {:.2f} min'.format(self.time), bg='#499e03', font=("Arial", 14))
         l2.grid(row=1, columnspan=2)
 
         b1 = Button(self.master, text="Open report", font=("Arial", 10), command=self.open_report)
@@ -154,7 +151,7 @@ class Window():
         self.master.rowconfigure(2, weight=1)
         
         self.center(WINDOW_WIDTH, WINDOW_HEIGHT)
-        self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.master.protocol("WM_DELETE_WINDOW", lambda:sys.exit())
 
         self.master.mainloop()
 
@@ -165,15 +162,12 @@ class Window():
         self.master.title("Critical Data")
         self.master['background'] = "#499e03"
 
-        global continue_flag
-        continue_flag = True
-
         l1 = Label(self.master, text='Search again?', bg='#499e03', font=("Arial", 14))
         l1.grid(row=0, columnspan=2)
         
         b1 = Button(self.master, text="Search!", font=("Arial", 12), command=self.master.destroy)
         b1.grid(row=1, column=0)
-        b2 = Button(self.master, text="Exit", font=("Arial", 12), command=self.on_closing)
+        b2 = Button(self.master, text="Exit", font=("Arial", 12), command=lambda:sys.exit())
         b2.grid(row=1, column=1)
 
         self.master.columnconfigure(0, weight=1)
@@ -182,60 +176,46 @@ class Window():
         self.master.rowconfigure(1, weight=1)
 
         self.center(WINDOW_WIDTH, WINDOW_HEIGHT)
-        self.master.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.master.protocol("WM_DELETE_WINDOW", lambda:sys.exit())
 
         self.master.mainloop()
 
     def get_path(self):
-        global path, folder, running
-        path = str(self.e1.get())
-        if path == "":
-            path = filedialog.askdirectory()
-        if path == "":
+        self.path = str(self.e1.get())
+        if self.path == "":
+            self.path = filedialog.askdirectory()
+        if self.path != "":
             self.master.destroy()
-            return self.search_init()
 
-        folder = glob.glob(path + "/*.pdf")
-
-        if running:
-            return self.get_params()
-
-        self.master.destroy()
-
-        if path == "":
-            self.search_init()
+        self.folder = glob.glob(self.path + "/*.pdf")
 
     def get_params(self):
-        global words_lookup
-        words_lookup = []
         user_input = str(self.e1.get())
         if user_input != "":
-            words_lookup= user_input.split(";")
+            self.words_lookup= user_input.split(";")
         else:
             param_file = filedialog.askopenfilename(
-                filetypes=[('Excel files', '*.xlsx'), ('CSV files', '*.csv')],
-                initialdir=path
+                filetypes = [('Excel files', '*.xlsx'), ('CSV files', '*.csv')],
+                initialdir = self.path
             )
 
-            if param_file == "":
-                self.master.destroy()
-                return self.params_window()
+            if param_file != "":
 
-            if ".xlsx" in param_file:
-                df = pd.DataFrame(pd.read_excel(param_file))
-                words_lookup = df['Parametro'].tolist()
-            elif ".csv" in param_file:
-                df = pd.DataFrame(pd.read_csv(param_file))
-                words_lookup = df['Parametro'].tolist()
+                if ".xlsx" in param_file:
+                    df = pd.DataFrame(pd.read_excel(param_file))
+                    self.words_lookup = df['Parametro'].tolist()
+                elif ".csv" in param_file:
+                    df = pd.DataFrame(pd.read_csv(param_file))
+                    self.words_lookup = df['Parametro'].tolist()
+                
+                self.ask_filename()
             
-        for i in range(len(words_lookup)):
-            words_lookup[i] = words_lookup[i].strip().upper()
-            
-        self.master.destroy()
+        for i in range(len(self.words_lookup)):
+            self.words_lookup[i] = self.words_lookup[i].strip().upper()
 
     def open_report(self):
         try:
-            os.system("start EXCEL.EXE " + csv_name + ".csv")
+            os.system("start EXCEL.EXE " + self.csv_name + ".csv")
         except Exception as e:
             print(e.args)
         self.continue_search()
@@ -267,30 +247,35 @@ class Window():
 
         return os.path.join(base_path, relative_path)
 
-    def on_closing(self):
-        self.master.destroy()
-        sys.exit()
-
 
 class Critical_Data():
+    def __init__(self) -> None:
+        self.path = ""
+        self.csv_name = ""
+        self.words_lookup = []
+        self.data = []
+
     # Lookup critical data
     def search_data(self, pdf):
         # Create a copy of original file
-        os.makedirs(path + "\\highlighted_pdf\\", exist_ok=True)
+        os.makedirs(self.path + "\\highlighted_pdf\\", exist_ok=True)
         pdf_name = os.path.basename(pdf).replace(".pdf", "")
-        searched_pdf = path + "\\highlighted_pdf\\" + pdf_name + "_" + os.path.basename(csv_name) + ".pdf"
+        searched_pdf = self.path + "\\highlighted_pdf\\" + pdf_name + "_" \
+                        + os.path.basename(self.csv_name) + ".pdf"
         shutil.copyfile(pdf, searched_pdf)
         # Extract text and search parameter
         doc = fitz.open(searched_pdf)
         num_pag = doc.page_count
         for i in range(num_pag):
             page = doc.load_page(i)
-            for param in words_lookup:
+            for param in self.words_lookup:
                 # Highlight text if found
                 quads = page.search_for(param, quads=True)
                 # Add to csv where the text was found
                 if quads:
-                    data.append(['=HYPERLINK("' + searched_pdf + '","' + os.path.basename(searched_pdf) + '")', param, "Page: " + str(i + 1)])
+                    self.data.append(['=HYPERLINK("' + searched_pdf + '","' + os.path.basename(searched_pdf) + '")', 
+                                    param, 
+                                    "Page: " + str(i + 1)])
 
                 page.add_highlight_annot(quads)
         # Save highlighted pdf
@@ -299,10 +284,10 @@ class Critical_Data():
         return
 
     # Open excel file and append data
-    def WriteCSV(self, data):
-        with open(csv_name + ".csv", 'a+', encoding="utf-8") as csv_doc:
+    def WriteCSV(self):
+        with open(self.csv_name + ".csv", 'a+', encoding="utf-8") as csv_doc:
             csv_doc = csv.writer(csv_doc)
-            csv_doc.writerows(data)
+            csv_doc.writerows(self.data)
 
             return
 
@@ -316,46 +301,47 @@ if __name__ == "__main__":
     app.run()
 
     while True:
-        global data
-        data = []
-        
         # Start csv file
         headers = ['Document', 'Parameter', 'Page']
-        data.append(headers)
+        crit.data.append(headers)
 
         start_time = time.time()
 
         # Ask for parameters to search
         app.params_window()
         # Ask name for csv
-        app.ask_filename()
+        # app.ask_filename()
         # Waiting window
         app.waiting()
-        
-        for file_ in folder:
-            crit.search_data(file_)
 
+        # Pass attribute
+        crit.path = app.path
+        crit.csv_name = app.csv_name
+        crit.words_lookup = app.words_lookup
+        
+        for file_ in app.folder:
+            crit.search_data(file_)
+        
         end_time = time.time() - start_time
-        end_time = end_time/60
+        app.time = end_time/60
 
         # Delete previous report if exists, without this data will be appended
         try:
-            os.remove(csv_name + ".csv")
+            os.remove(app.csv_name + ".csv")
         except:
             pass
-
+        
         # Drop duplicates
-        data = list(data for data, _ in itertools.groupby(data))
-        crit.WriteCSV(data)
+        crit.data = list(crit.data for crit.data, _ in itertools.groupby(crit.data))
+        crit.WriteCSV()
 
         # Remove empty rows in excel file
-        df = pd.read_csv(csv_name + ".csv", encoding="utf-8")
+        df = pd.read_csv(app.csv_name + ".csv", encoding="utf-8")
         # Droping the empty rows
         modifiedDF = df.dropna()
         # Saving it to the csv file 
-        modifiedDF.to_csv(csv_name + ".csv", index=False)
+        modifiedDF.to_csv(app.csv_name + ".csv", index=False)
 
+        print("\nSearch finished in {} files.\nElapsed time: {:.2f} min".format(len(app.folder), app.time))
         # Show done window
-        app.done(end_time)
-
-        print("\nSearch finished in {} files.\nElapsed time: {:.2f} min".format(len(folder), end_time))
+        app.done()
