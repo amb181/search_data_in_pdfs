@@ -1,20 +1,23 @@
 """ 
-Version 1.0.0
+Version 1.0.1
 almolina@tenaris.com
-06/2022
+07/2022
 """
 from tkinter import *
 from tkinter import filedialog
-import glob, os, re, time, fitz, difflib, sys, datetime
+import os, time, difflib, sys, datetime, re
+import xml.etree.ElementTree as ET
+import search_critical_data as scd
 
 WINDOW_WIDTH = 450
 WINDOW_HEIGHT = 150
+DEFAULT_PATH = "C:/Users/" + os.getlogin() + "/Documents/"
 
 class Window():
     def __init__(self) -> None:
-        self.path = ""
+        self.file1 = ""
+        self.file2 = ""
         self.folder = []
-        self.running = False
         self.html_name = ""
         self.time = 0.0
 
@@ -22,35 +25,30 @@ class Window():
         self.search_init()
 
     def search_init(self):
-        self.running = False
-        try:
-            self.master.destroy()
-            self.running = True
-        except:
-            pass
         self.master = Tk()
     
         self.master.title("Compare pdfs")
-        self.master['background'] = "#0088ff"
+        self.master['background'] = "#0066CC"
         self.master.iconbitmap(default=Window.resource_path("Tenaris_Logo.ico"))
 
-        self.l1 = Label(self.master, text="Folder location:", bg='#0088ff', fg="#fff", font=("Arial", 14))
+        self.l1 = Label(self.master, text="Choose files:", bg='#0066CC', fg="#fff", font=("Arial", 14))
         self.l1.grid(row=0, column=0)
 
-        self.e1 = Entry(self.master, font=("Arial", 14))
-        self.e1.grid(row=0, column=1)
+        # self.e1 = Entry(self.master, font=("Arial", 14))
+        # self.e1.grid(row=0, column=1)
 
-        b = Button(self.master, text="Select", font=("Arial", 10), command=self.get_path)
-        b.grid(row=0, column=2)
+        b = Button(self.master, text="Select files", font=("Arial", 10), command=self.get_files)
+        b.grid(row=1, column=0) # row=0, column=2
 
         self.master.columnconfigure(0, weight=1)
-        self.master.columnconfigure(1, weight=1)
-        self.master.columnconfigure(2, weight=1)
+        # self.master.columnconfigure(1, weight=1)
+        # self.master.columnconfigure(2, weight=1)
         self.master.rowconfigure(0, weight=1)
+        self.master.rowconfigure(1, weight=1)   # Add
 
         self.master.bind_all("<Key>", self._onKeyRelease, "+")
         self.center(WINDOW_WIDTH, WINDOW_HEIGHT)
-        self.master.protocol("WM_DELETE_WINDOW", lambda:sys.exit())
+        self.master.protocol("WM_DELETE_WINDOW", lambda:self.master.destroy())
 
         self.master.mainloop()
 
@@ -58,17 +56,17 @@ class Window():
         self.master = Tk()
         self.master.attributes("-topmost", True)
         self.master.title("Critical Data")
-        self.master['background'] = "#0088ff"
+        self.master['background'] = "#0066CC"
 
-        l1 = Label(self.master, text='Search done!', bg='#0088ff', fg="#fff", font=("Arial", 14))
+        l1 = Label(self.master, text='Search done!', bg='#0066CC', fg="#fff", font=("Arial", 14))
         l1.grid(row=0, columnspan=2)
         l2 = Label(self.master, text='Elapsed time: {:.2f} min'.format(self.time), 
-                    bg='#0088ff', fg="#fff", font=("Arial", 14))
+                    bg='#0066CC', fg="#fff", font=("Arial", 14))
         l2.grid(row=1, columnspan=2)
 
         b1 = Button(self.master, text="Open report", font=("Arial", 10), command=self.open_report)
         b1.grid(row=2, column=0)
-        b2 = Button(self.master, text="Close", font=("Arial", 10), command=lambda:sys.exit())
+        b2 = Button(self.master, text="Close", font=("Arial", 10), command=lambda:self.master.destroy())
         b2.grid(row=2, column=1)
 
         self.master.columnconfigure(0, weight=1)
@@ -78,36 +76,48 @@ class Window():
         self.master.rowconfigure(2, weight=1)
         
         self.center(WINDOW_WIDTH, WINDOW_HEIGHT)
-        self.master.protocol("WM_DELETE_WINDOW", lambda:sys.exit())
+        self.master.protocol("WM_DELETE_WINDOW", lambda:self.master.destroy())
 
         self.master.mainloop()
 
     def open_report(self):
         try:
             os.system("start CHROME.EXE " + self.html_name + ".html")
-            sys.exit()
+            self.master.destroy()
         except Exception as e:
             print(e.args)
 
-    def get_path(self):
-        self.path = str(self.e1.get())
-        if self.path == "":
-            self.path = filedialog.askdirectory()
-        if self.path == "":
-            self.master.destroy()
-            return self.search_init()
-            
-        self.folder = glob.glob(self.path + "/*.pdf")
+    def get_files(self):
+        global DEFAULT_PATH
+        # self.path = str(self.e1.get())
+        # if self.path == "":
+        #     self.path = filedialog.askdirectory()
+        # if self.path == "":
+        #     self.master.destroy()
+        #     return self.search_init()
+        # Get 1st file
+        self.file1 = filedialog.askopenfilename(
+            filetypes = [('PDF files', '*.pdf')],
+            initialdir = DEFAULT_PATH
+        )
+        DEFAULT_PATH = os.path.abspath(self.file1).replace(os.path.basename(self.file1), "")
+        # Get 2nd file
+        self.file2 = filedialog.askopenfilename(
+            filetypes = [('PDF files', '*.pdf')],
+            initialdir = DEFAULT_PATH
+        )
 
-        if self.running:
-            return self.get_params()
+        self.folder = [self.file1, self.file2]
 
         self.master.destroy()
 
-        if self.path == "":
+        if self.file1 == "" or self.file2 == "":
             self.search_init()
+        else:
+            self.ask_filename()
 
     def ask_filename(self):
+        global DEFAULT_PATH
         self.master = Tk()
         self.master.withdraw()
 
@@ -117,7 +127,7 @@ class Window():
         self.html_name = filedialog.asksaveasfilename(
             defaultextension = '.html', 
             filetypes = [('HTML files', '*.html')],
-            initialdir = self.path,
+            initialdir = DEFAULT_PATH,
             initialfile = csv_placeholder
         )
 
@@ -125,7 +135,23 @@ class Window():
             self.html_name = self.html_name.replace(".html", "")
 
         self.master.destroy()
+        comp = Compare()
+        comp.html_name = self.html_name
+        search_critical = scd.Window()
+        start_time = time.time()
+        search_critical.waiting()
+        for pdf in self.folder:
+            comp.pdf_2_txt(pdf)
 
+        comp.compare_files()
+        #comp.validate_search()
+
+        end_time = time.time() - start_time
+        self.time = end_time/60
+        search_critical.wait.destroy()
+        self.done()
+        print("Elapsed time: {:.2f} min".format(self.time))
+        
     # Center window
     def center(self, w_width, w_height):
         screen_width = self.master.winfo_screenwidth() # 1920
@@ -158,104 +184,85 @@ class Window():
 
 class Compare():
     def __init__(self) -> None:
-        self.Ordinals = {
-            'FIRST'     :  1,
-            'SECOND'    :  2,
-            'THIRD'     :  3,
-            'FOURTH'    :  4,
-            'FIFTH'     :  5,
-            'SIXTH'     :  6,
-            'SEVENTH'   :  7,
-            'EIGHTH'    :  8,
-            'NINTH'     :  9,
-            'TENTH'     : 10,
-            'ELEVENTH'  : 11 
-        }
-        self.path = ""
         self.diff = ""
-        self.new_file = ""
+        self.txt_files = []
 
     def pdf_2_txt(self, pdf):
-        name = os.path.basename(pdf).split('/')[:1][0].replace(".pdf", "")
-        
-        doc = fitz.open(pdf)
-        num_pag = doc.page_count
-        for i in range(num_pag):
-            page = doc.load_page(i)
-            text = page.get_text()
-
-            with open(self.path + "/" + name + ".txt", "a", encoding="utf-8") as f:
-                f.write(text)
-                f.write("- * - * - * - E N D  O F  P A G E  {} - * - * - * -\n".format(i + 1))
+        txt_name = pdf.replace(".pdf", ".txt")
+        extract_pdf = "python -m fitz gettext \"{}\" -output \"{}\"".format(pdf, txt_name) #-noformfeed -extra-spaces
+        os.system(extract_pdf)
+        text = ""
+        with open(txt_name, "r", encoding="utf8") as f:
+            lines = f.readlines()
+        for line in lines:
+            if line.strip():
+                line = re.sub(r"\s+", " ", line)
+                text = text + "\n" + line
+            else:
+                continue
+        os.remove(txt_name)
+        self.txt_files.append(text.strip())
             
     def compare_files(self):
-        files = {}
-        folder_txt = glob.glob(self.path + "/*.txt")
-
-        for file in folder_txt:
-            with open(file, "r", encoding="utf-8") as f:
-                fi = f.readlines()
-            os.remove(file)
-
-            # Find doc version
-            version = ""
-            for row in fi:
-                try:
-                    version = re.compile("^([A-Z]+) EDITION").findall(row)[0]
-                    break
-                except:
-                    pass
-
-            version = self.Ordinals[version]
-            files[int(version)] = fi
-
-        files = list(sorted(files.items()))
-
-        self.diff = difflib.HtmlDiff(wrapcolumn=70).make_file(files[0][1], files[1][1])
+        self.diff = difflib.HtmlDiff(wrapcolumn=80).make_file(self.txt_files[0].split("\n"), self.txt_files[1].split("\n"))
         with open(self.html_name + ".html", "w", encoding="utf-8") as f:
             f.write(self.diff)
 
-        self.new_file = files[1][1]
-
     def validate_search(self):
         blocks = []
-        pattern = re.compile('class="diff_sub">(.*?)</span>')
+        self.diff = self.diff.replace("&nbsp;", " ")
+        tree = ET.fromstring(self.diff)
+        counter = 1
+        for node in tree.iter('tbody'):
+            for elem in node.iter('span'):
+                if not elem.tag==node.tag:
+                    #print("{}: {}".format(elem.attrib.get("class"), elem.text))
+                    if elem.attrib.get("class") == "diff_sub":
+                        blocks.append(elem.text)
+                        counter = 0
+                    else:
+                        counter += 1
+                        if counter > 1:
+                            blocks.append("")
         
-        try:
-            total_sub = pattern.findall(self.diff)
-            for sub in total_sub:
-                text = sub.replace("&nbsp;", " ")
-                blocks.append(text)
-        except:
-            pass
+        new_blocks = []
+        new_item = ""
+        for item in blocks:
+            if item == "" and new_item != "":
+                new_blocks.append(new_item.strip())
+                new_item = ""
+            elif item != "":
+                new_item = new_item + " " + item
+        #print(new_blocks)
+        # with open(self.html_name + ".txt", "w") as f:
+        #     f.write(self.txt_files[1])
         
-        for block in blocks:
-            if block in self.new_file:
-                print("Already in older file!\n{}\n".format(block))
+        for item in new_blocks:
+            # Insert fuzzy wuzzy logic in block below #
+            if item in self.txt_files[1]:
+                print("Section duplicated: {}".format(item))
         
-# # # #  M A I N  F U N C T I O N  # # # #
+# # # # #  M A I N  F U N C T I O N  # # # #
 
-if __name__ == '__main__':
-    # Init window
-    app = Window()
-    comp = Compare()
-    app.run()
-    # Ask name for csv
-    app.ask_filename()
+# if __name__ == '__main__':
+#     # Init window
+#     app = Window()
+#     comp = Compare()
+#     app.run()
+#     # Ask name for csv
+#     app.ask_filename()
+#     comp.html_name = app.html_name
+
+#     start_time = time.time()
+
+#     for pdf in app.folder:
+#         comp.pdf_2_txt(pdf)
+
+#     comp.compare_files()
+#     comp.validate_search()
+
+#     end_time = time.time() - start_time
+#     app.time = end_time/60
     
-    comp.path = app.path
-    comp.html_name = app.html_name
-
-    start_time = time.time()
-
-    for pdf in app.folder:
-        comp.pdf_2_txt(pdf)
-
-    comp.compare_files()
-    comp.validate_search()
-
-    end_time = time.time() - start_time
-    app.time = end_time/60
-    
-    app.done()
-    print("Elapsed time: {:.2f} min".format(app.time))
+#     app.done()
+#     print("Elapsed time: {:.2f} min".format(app.time))
